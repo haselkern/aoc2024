@@ -27,3 +27,12 @@ begin: _folders
 # Makes sure that folders exist
 _folders:
     mkdir -p input src/bin
+
+# Creates all input files. Use this to start using the repo.
+init: _folders
+    #!/usr/bin/env bash
+    for i in $(seq -w 1 25);
+    do
+        touch input/$i
+        touch input/$i-test
+    done
