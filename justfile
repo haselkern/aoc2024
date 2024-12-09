@@ -13,6 +13,10 @@ run:
     RUSTFLAGS=-Awarnings cargo build --release --bin {{day}}
     time ./target/release/{{day}}
 
+bench:
+    RUSTFLAGS=-Awarnings cargo build --release --bin {{day}}
+    hyperfine --warmup 5 ./target/release/{{day}}
+
 # Begin working on todays problem.
 # Downloads input, creates template and opens the problem and code.
 begin: _folders
