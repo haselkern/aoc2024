@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 
 use aoc::*;
@@ -5,14 +6,69 @@ use aoc::*;
 const INPUT: &str = include_str!("../../input/09");
 
 fn main() {
-    assert_example!(part1, "09-test", 0);
+    assert_example!(part1, "09-test", 1928);
     println!("Part 1: {}", part1(INPUT));
     assert_example!(part2, "09-test", 2858);
     println!("Part 2: {}", part2(INPUT));
 }
 
-fn part1(_input: &str) -> usize {
-    0 // TODO Paste solution from other machine…
+fn part1(input: &str) -> usize {
+    let mut disk_map = parse(input);
+    let mut map_index = 0;
+    let mut checksum = 0;
+
+    'checksum: while let Some(block) = disk_map.pop_front() {
+        match block {
+            Block::Free {
+                length: mut free_space,
+                ..
+            } => {
+                // Fill free space
+                let mut fill = Vec::new();
+                while free_space > 0 {
+                    let Some(tail) = disk_map.pop_back() else {
+                        break 'checksum;
+                    };
+
+                    match tail {
+                        Block::Free { .. } => (), // Remove free space from the end
+                        Block::File(File {
+                            id,
+                            length,
+                            position,
+                        }) => {
+                            let insert_length = free_space.min(length);
+                            free_space -= insert_length;
+                            let remaining_length = length - insert_length;
+                            fill.push(Block::File(File {
+                                position,
+                                id,
+                                length: insert_length,
+                            }));
+                            if remaining_length > 0 {
+                                disk_map.push_back(Block::File(File {
+                                    position,
+                                    id,
+                                    length: remaining_length,
+                                }));
+                            }
+                        }
+                    }
+                }
+                for block in fill.into_iter().rev() {
+                    disk_map.push_front(block);
+                }
+            }
+            Block::File(File { id, length, .. }) => {
+                for _ in 0..length {
+                    checksum += id * map_index;
+                    map_index += 1;
+                }
+            }
+        }
+    }
+
+    checksum
 }
 
 fn part2(input: &str) -> usize {
@@ -29,8 +85,8 @@ fn part2(input: &str) -> usize {
             }) => {
                 // Find free space to put file
                 let mut space = None;
-                for i in 0..disk.len() {
-                    if let Block::Free { position, length } = disk[i] {
+                for (i, &block) in disk.iter().enumerate() {
+                    if let Block::Free { position, length } = block {
                         if length >= file_length {
                             space = Some((i, position, length));
                             break;
@@ -56,15 +112,17 @@ fn part2(input: &str) -> usize {
                 });
 
                 // Adjust remaining space
-                if space_length == file_length {
-                    disk.remove(space_index);
-                } else if space_length > file_length {
-                    disk[space_index] = Block::Free {
-                        position: space_position + file_length,
-                        length: space_length - file_length,
+                match space_length.cmp(&file_length) {
+                    Ordering::Equal => {
+                        disk.remove(space_index);
                     }
-                } else {
-                    panic!("this should not be possible");
+                    Ordering::Greater => {
+                        disk[space_index] = Block::Free {
+                            position: space_position + file_length,
+                            length: space_length - file_length,
+                        };
+                    }
+                    Ordering::Less => panic!("this should not be possible"),
                 }
             }
         }
