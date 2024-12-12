@@ -1,5 +1,6 @@
 //! This library contains useful helper functions that may be useful in several problems.
 
+use glam::IVec2;
 use std::{
     fmt::{Debug, Display},
     ops::{Div, Mul, Rem},
@@ -106,3 +107,23 @@ macro_rules! assert_example {
         )
     };
 }
+
+/// 4 directions. Start pointing right and go CCW.
+pub const DIRECTIONS4: [IVec2; 4] = [
+    IVec2::new(1, 0),
+    IVec2::new(0, 1),
+    IVec2::new(-1, 0),
+    IVec2::new(0, -1),
+];
+
+/// 8 directions. Start pointing right and go CCW.
+pub const DIRECTIONS8: [IVec2; 8] = [
+    IVec2::new(1, 0),
+    IVec2::new(1, 1),
+    IVec2::new(0, 1),
+    IVec2::new(-1, 1),
+    IVec2::new(-1, 0),
+    IVec2::new(-1, -1),
+    IVec2::new(0, -1),
+    IVec2::new(1, -1),
+];

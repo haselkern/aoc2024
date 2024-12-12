@@ -22,15 +22,6 @@ fn part2(input: &str) -> usize {
     map.trailheads().map(|t| map.distinct_trails(t)).sum()
 }
 
-fn directions() -> [IVec2; 4] {
-    [
-        IVec2::new(1, 0),
-        IVec2::new(-1, 0),
-        IVec2::new(0, 1),
-        IVec2::new(0, -1),
-    ]
-}
-
 #[derive(Debug)]
 struct Map {
     height: HashMap<IVec2, i64>,
@@ -67,7 +58,7 @@ impl Map {
     }
 
     fn climb_up(&self, from: IVec2, from_height: i64) -> Vec<IVec2> {
-        directions()
+        DIRECTIONS4
             .into_iter()
             .filter_map(|dir| {
                 let pos = from + dir;

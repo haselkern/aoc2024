@@ -56,7 +56,7 @@ fn check_x_mas(start: IVec2, field: &Field) -> usize {
 }
 
 fn count_xmas_at(start: IVec2, field: &Field) -> usize {
-    DIRECTIONS
+    DIRECTIONS8
         .iter()
         .filter(|&&dir| check_xmas(start, dir, field))
         .count()
@@ -68,17 +68,6 @@ fn check_xmas(start: IVec2, direction: IVec2, field: &Field) -> bool {
         && field.get(start + direction * 2) == 'A'
         && field.get(start + direction * 3) == 'S'
 }
-
-const DIRECTIONS: [IVec2; 8] = [
-    IVec2::new(1, 0),
-    IVec2::new(1, 1),
-    IVec2::new(0, 1),
-    IVec2::new(-1, 1),
-    IVec2::new(-1, 0),
-    IVec2::new(-1, -1),
-    IVec2::new(0, -1),
-    IVec2::new(1, -1),
-];
 
 struct Field {
     data: Vec<Vec<char>>,
