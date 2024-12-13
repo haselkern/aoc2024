@@ -1,8 +1,8 @@
 use aoc::*;
-use cached::proc_macro::cached;
-use glam::U64Vec2;
+use glam::I64Vec2;
 use itertools::Itertools;
 use regex::Regex;
+use std::sync::LazyLock;
 
 const INPUT: &str = include_str!("../../input/13");
 
@@ -12,18 +12,15 @@ fn main() {
     println!("Part 2: {}", part2(INPUT));
 }
 
-fn part1(input: &str) -> usize {
-    parse(input)
-        .into_iter()
-        .map(ClawMachine::tokens_to_win)
-        .sum()
+fn part1(input: &str) -> i64 {
+    parse(input).into_iter().map(|c| c.tokens_to_win(100)).sum()
 }
 
-fn part2(input: &str) -> usize {
+fn part2(input: &str) -> i64 {
     parse(input)
         .into_iter()
         .map(ClawMachine::fix_conversion_error)
-        .map(ClawMachine::tokens_to_win2)
+        .map(|c| c.tokens_to_win(i64::MAX))
         .sum()
 }
 
@@ -33,73 +30,45 @@ fn parse(input: &str) -> Vec<ClawMachine> {
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 struct ClawMachine {
-    a: U64Vec2,
-    b: U64Vec2,
-    prize: U64Vec2,
+    a: I64Vec2,
+    b: I64Vec2,
+    prize: I64Vec2,
 }
 
 impl ClawMachine {
     fn fix_conversion_error(self) -> Self {
         Self {
-            prize: U64Vec2::new(self.prize.x + 10000000000000, self.prize.y + 10000000000000),
+            prize: self.prize + I64Vec2::splat(10000000000000),
             ..self
         }
     }
 
-    fn tokens_to_win(self) -> usize {
-        tokens_to_win(self, 0, 0, U64Vec2::ZERO)
-    }
+    fn tokens_to_win(self, limit: i64) -> i64 {
+        let b = (self.a.x * self.prize.y - self.a.y * self.prize.x)
+            / (self.a.x * self.b.y - self.a.y * self.b.x);
+        let a = (self.prize.x - self.b.x * b) / self.a.x;
 
-    fn tokens_to_win2(self) -> usize {
-        tokens_to_win2(self, 0, 0, U64Vec2::ZERO)
+        if a > limit || b > limit {
+            return 0;
+        }
+
+        if (a * self.a + b * self.b) == self.prize {
+            a * 3 + b
+        } else {
+            0
+        }
     }
 
     fn parse(input: &str) -> Self {
-        let re =
-            Regex::new(r"X\+(\d+), Y\+(\d+)\n.*X\+(\d+), Y\+(\d+)\n.*X=(\d+), Y=(\d+)").unwrap();
-        let captures = re.captures(input).unwrap();
+        let captures = REGEX.captures(input).unwrap();
         Self {
-            a: U64Vec2::new(captures[1].parse().unwrap(), captures[2].parse().unwrap()),
-            b: U64Vec2::new(captures[3].parse().unwrap(), captures[4].parse().unwrap()),
-            prize: U64Vec2::new(captures[5].parse().unwrap(), captures[6].parse().unwrap()),
+            a: I64Vec2::new(captures[1].parse().unwrap(), captures[2].parse().unwrap()),
+            b: I64Vec2::new(captures[3].parse().unwrap(), captures[4].parse().unwrap()),
+            prize: I64Vec2::new(captures[5].parse().unwrap(), captures[6].parse().unwrap()),
         }
     }
 }
 
-#[cached]
-fn tokens_to_win(machine: ClawMachine, pressed_a: usize, pressed_b: usize, pos: U64Vec2) -> usize {
-    if pressed_a > 100 || pressed_b > 100 {
-        0
-    } else if pos == machine.prize {
-        pressed_a * 3 + pressed_b
-    } else if pos.x > machine.prize.x || pos.y > machine.prize.y {
-        0
-    } else {
-        let a = tokens_to_win(machine, pressed_a + 1, pressed_b, pos + machine.a);
-        let b = tokens_to_win(machine, pressed_a, pressed_b + 1, pos + machine.b);
-        match (a, b) {
-            (0, 0) => 0,
-            (a, 0) => a,
-            (0, b) => b,
-            (a, b) => a.min(b),
-        }
-    }
-}
-
-#[cached]
-fn tokens_to_win2(machine: ClawMachine, pressed_a: usize, pressed_b: usize, pos: U64Vec2) -> usize {
-    if pos == machine.prize {
-        pressed_a * 3 + pressed_b
-    } else if pos.x > machine.prize.x || pos.y > machine.prize.y {
-        0
-    } else {
-        let a = tokens_to_win(machine, pressed_a + 1, pressed_b, pos + machine.a);
-        let b = tokens_to_win(machine, pressed_a, pressed_b + 1, pos + machine.b);
-        match (a, b) {
-            (0, 0) => 0,
-            (a, 0) => a,
-            (0, b) => b,
-            (a, b) => a.min(b),
-        }
-    }
-}
+static REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"X\+(\d+), Y\+(\d+)\n.*X\+(\d+), Y\+(\d+)\n.*X=(\d+), Y=(\d+)").unwrap()
+});
