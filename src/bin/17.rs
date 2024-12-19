@@ -16,8 +16,37 @@ fn part1(input: &str) -> String {
     computer.output.iter().map(usize::to_string).join(",")
 }
 
-fn part2(_input: &str) -> usize {
-    0
+fn part2(input: &str) -> usize {
+    let computer = Computer::parse(input);
+
+    // Idea: Test all possible combinations of bits in this mask, then move the mask over init_a.
+    let mutate_bits = 16;
+    let mutate_to = 2usize.pow(mutate_bits);
+    let mut init_a = 0;
+
+    // Do a few iterations to be safe
+    for _ in 0..3 {
+        // Shuffle bits around to improve
+        for shift in (0..(usize::BITS - mutate_bits)).rev() {
+            let mask = !((mutate_to - 1) << shift);
+            let mut best_add = 0;
+            let mut best_q = 0;
+            for add in 0..mutate_to {
+                init_a = (init_a & mask) | (add << shift);
+                let mut computer = computer.clone();
+                computer.a = init_a;
+                computer.run();
+                let q = computer.quineness();
+                if q > best_q {
+                    best_q = q;
+                    best_add = add;
+                }
+            }
+            init_a = (init_a & mask) | (best_add << shift);
+        }
+    }
+
+    init_a
 }
 
 #[derive(Clone)]
@@ -35,6 +64,14 @@ impl Computer {
         while !self.is_halted() {
             self.step();
         }
+    }
+
+    fn quineness(&self) -> usize {
+        self.output
+            .iter()
+            .zip(&self.program)
+            .filter(|(a, b)| a == b)
+            .count()
     }
 
     fn step(&mut self) {
