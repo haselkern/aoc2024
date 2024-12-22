@@ -1,7 +1,9 @@
 use aoc::*;
 use glam::IVec2;
+use itertools::Itertools;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::{fmt, iter};
+use std::iter;
 
 const INPUT: &str = include_str!("../../input/16");
 
@@ -9,181 +11,121 @@ fn main() {
     assert_example!(part1, "16-test", 7036);
     println!("Part 1: {}", part1(INPUT));
     assert_example!(part2, "16-test", 45);
-    // TODO Make part 2 terminate
     println!("Part 2: {}", part2(INPUT));
 }
 
 fn part1(input: &str) -> usize {
-    let mut maze = Maze::parse(input);
-    maze.solve();
-    maze.best_score()
+    let maze = Maze::parse(input);
+    maze.dijsktra().lowest_score(maze.end)
 }
 
 fn part2(input: &str) -> usize {
-    let mut maze = Maze::parse(input);
-    maze.solve();
-    maze.good_seats()
+    Maze::parse(input).good_seats()
 }
 
 #[derive(Clone, Debug)]
 struct Tile {
-    pos: IVec2,
-    visited: bool,
     score: usize,
-    direction: Direction,
-}
-
-impl Tile {
-    fn new(pos: IVec2) -> Self {
-        Self {
-            pos,
-            visited: false,
-            score: usize::MAX,
-            direction: Direction::East,
-        }
-    }
+    visited: bool,
+    previous: Vec<(IVec2, Direction)>,
 }
 
 struct Maze {
     start: IVec2,
     end: IVec2,
-    walls: HashSet<IVec2>,
-    tiles: HashMap<IVec2, Tile>,
+    tiles: HashSet<IVec2>,
 }
 
 impl Maze {
-    fn solve(&mut self) {
+    fn good_seats(&self) -> usize {
+        let dijkstra = self.dijsktra();
+        let endings = dijkstra
+            .0
+            .iter()
+            .filter(|((pos, _), _)| *pos == self.end)
+            .min_set_by_key(|(_, tile)| tile.score);
+        endings
+            .into_iter()
+            .map(|(end, _)| dijkstra.good_seats(*end))
+            .fold(HashSet::new(), |mut a, b| {
+                a.extend(b);
+                a
+            })
+            .len()
+    }
+
+    fn dijsktra(&self) -> Dijkstra {
+        let mut maze: HashMap<(IVec2, Direction), Tile> = self
+            .tiles
+            .iter()
+            .copied()
+            .cartesian_product(Direction::ALL)
+            .zip(iter::repeat(Tile {
+                score: usize::MAX,
+                visited: false,
+                previous: Vec::new(),
+            }))
+            .collect();
+
+        maze.insert(
+            (self.start, Direction::East),
+            Tile {
+                score: 0,
+                visited: false,
+                previous: Vec::new(),
+            },
+        );
+
         loop {
-            let next = self
-                .tiles
-                .values()
-                .filter(|t| !t.visited)
-                .min_by_key(|t| t.score);
-            let Some(next) = next.cloned() else {
+            // Pick unvisited with minimal distance
+            let next = maze
+                .iter()
+                .filter(|(_, tile)| !tile.visited)
+                .min_by_key(|(_, tile)| tile.score)
+                .map(|(&k, v)| (k, v.clone()));
+            let Some(((pos, dir), current)) = next else {
                 break;
             };
 
-            self.tiles.insert(
-                next.pos,
+            // Mark visited
+            maze.insert(
+                (pos, dir),
                 Tile {
                     visited: true,
-                    ..next
+                    ..current
                 },
             );
 
-            for dir in Direction::ALL {
-                let neighbor = next.pos + dir.vec();
-                let Some(neighbor) = self.tiles.get_mut(&neighbor) else {
-                    continue;
-                };
-                if neighbor.visited {
-                    continue;
+            // Update neighbors
+            let update_neighbor = |add: usize| {
+                let new_score = current.score + add;
+                move |neighbor: &mut Tile| match new_score.cmp(&neighbor.score) {
+                    Ordering::Less => {
+                        neighbor.score = new_score;
+                        neighbor.previous = vec![(pos, dir)];
+                    }
+                    Ordering::Equal => {
+                        neighbor.previous.push((pos, dir));
+                    }
+                    Ordering::Greater => {}
                 }
+            };
 
-                let new_score = if dir == next.direction {
-                    next.score + 1
-                } else {
-                    next.score + 1001
-                };
-
-                if new_score < neighbor.score {
-                    neighbor.score = new_score;
-                    neighbor.direction = dir;
-                }
-            }
+            maze.entry((pos + dir.vec(), dir))
+                .and_modify(update_neighbor(1));
+            maze.entry((pos, dir.rotate_cw()))
+                .and_modify(update_neighbor(1000));
+            maze.entry((pos, dir.rotate_ccw()))
+                .and_modify(update_neighbor(1000));
         }
 
-        // println!("===");
-        // let size = self.tiles.iter().fold(IVec2::ZERO, |a, b| a.max(*b.0));
-        // for y in 1..=size.y {
-        //     for x in 1..=size.x {
-        //         let pos = IVec2::new(x, y);
-        //         let tile = self.tiles.get(&pos).map(|t| t.score).unwrap_or(0);
-        //         print!("{tile:>6}");
-        //     }
-        //     println!();
-        // }
-    }
-
-    fn best_score(&self) -> usize {
-        self.tiles.get(&self.end).unwrap().score
-    }
-
-    fn good_seats(&self) -> usize {
-        self.good_seats_rec(
-            self.best_score(),
-            0,
-            HashSet::new(),
-            Direction::East,
-            self.start,
-        )
-        .len()
-    }
-
-    fn good_seats_rec(
-        &self,
-        target_score: usize,
-        score: usize,
-        mut visited: HashSet<IVec2>,
-        dir: Direction,
-        pos: IVec2,
-    ) -> HashSet<IVec2> {
-        if score > target_score {
-            return HashSet::new();
-        }
-
-        if !self.tiles.contains_key(&pos) {
-            return HashSet::new();
-        }
-
-        if visited.contains(&pos) {
-            return HashSet::new();
-        }
-        visited.insert(pos);
-
-        if score == target_score && pos == self.end {
-            return visited;
-        }
-
-        let mut result = HashSet::new();
-        {
-            result.extend(self.good_seats_rec(
-                target_score,
-                score + 1,
-                visited.clone(),
-                dir,
-                pos + dir.vec(),
-            ));
-        }
-        {
-            let new_dir = dir.rotate_cw();
-            result.extend(self.good_seats_rec(
-                target_score,
-                score + 1001,
-                visited.clone(),
-                new_dir,
-                pos + new_dir.vec(),
-            ));
-        }
-        {
-            let new_dir = dir.rotate_ccw();
-            result.extend(self.good_seats_rec(
-                target_score,
-                score + 1001,
-                visited.clone(),
-                new_dir,
-                pos + new_dir.vec(),
-            ));
-        }
-
-        result
+        Dijkstra(maze)
     }
 
     fn parse(input: &str) -> Self {
         let mut start = IVec2::ZERO;
         let mut end = IVec2::ZERO;
-        let mut tiles = HashMap::new();
-        let mut walls = HashSet::new();
+        let mut tiles = HashSet::new();
 
         let input = input
             .lines()
@@ -194,60 +136,49 @@ impl Maze {
             match c {
                 'S' => {
                     start = pos;
-                    tiles.insert(
-                        pos,
-                        Tile {
-                            pos,
-                            visited: false,
-                            score: 0,
-                            direction: Direction::East,
-                        },
-                    );
+                    tiles.insert(pos);
                 }
                 'E' => {
                     end = pos;
-                    tiles.insert(pos, Tile::new(pos));
+                    tiles.insert(pos);
                 }
-                '#' => {
-                    walls.insert(pos);
-                }
+                '#' => {}
                 '.' => {
-                    tiles.insert(pos, Tile::new(pos));
+                    tiles.insert(pos);
                 }
                 other => panic!("unknown tile: '{other}'"),
             }
         }
 
-        Self {
-            start,
-            end,
-            walls,
-            tiles,
-        }
+        Self { start, end, tiles }
     }
 }
 
-impl fmt::Display for Maze {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let size = self.walls.iter().fold(IVec2::ZERO, |a, b| a.max(*b));
-        for y in 0..=size.y {
-            for x in 0..=size.x {
-                let pos = IVec2::new(x, y);
-                if self.walls.contains(&pos) {
-                    write!(f, "█")?;
-                } else if let Some(t) = self.tiles.get(&pos) {
-                    write!(f, "{}", t.direction)?;
-                } else {
-                    write!(f, "?")?;
-                }
-            }
-            writeln!(f)?;
+struct Dijkstra(HashMap<(IVec2, Direction), Tile>);
+
+impl Dijkstra {
+    fn lowest_score(&self, at: IVec2) -> usize {
+        Direction::ALL
+            .into_iter()
+            .map(|dir| self.0.get(&(at, dir)).unwrap().score)
+            .min()
+            .unwrap()
+    }
+
+    fn good_seats(&self, current: (IVec2, Direction)) -> HashSet<IVec2> {
+        let current_tile = self.0.get(&current).unwrap();
+
+        let mut seats = HashSet::from([current.0]);
+
+        for &prev in &current_tile.previous {
+            seats.extend(self.good_seats(prev));
         }
-        Ok(())
+
+        seats
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum Direction {
     North,
     East,
@@ -287,17 +218,6 @@ impl Direction {
             Self::East => IVec2::new(1, 0),
             Self::South => IVec2::new(0, 1),
             Self::West => IVec2::new(-1, 0),
-        }
-    }
-}
-
-impl fmt::Display for Direction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::North => write!(f, "^"),
-            Self::East => write!(f, ">"),
-            Self::South => write!(f, "v"),
-            Self::West => write!(f, "<"),
         }
     }
 }
